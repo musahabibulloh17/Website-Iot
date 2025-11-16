@@ -1,0 +1,25 @@
+{
+  "name": "iot-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9"
+  }
+}
+
