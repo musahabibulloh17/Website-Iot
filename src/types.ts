@@ -26,3 +26,5 @@ export interface DashboardState {
 	actuators: Record<ActuatorKey, ActuatorState>;
 }
 
+
+

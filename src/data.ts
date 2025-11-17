@@ -7,9 +7,9 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 
 function generateInitialSeries(): SensorSeries {
 	const now = Date.now();
-	const start = subHours(now, 24).getTime();
+	const start = subHours(now, 12).getTime();
 	const pointsPerMinute = 1; // per minute resolution
-	const totalPoints = 24 * 60 * pointsPerMinute;
+	const totalPoints = 12 * 60 * pointsPerMinute;
 
 	const series: Partial<SensorSeries> = {};
 

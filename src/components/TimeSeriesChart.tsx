@@ -51,7 +51,7 @@ export default function TimeSeriesChart({ title, series }: Props) {
 	});
 
 	const now = Date.now();
-	const start = now - 24 * 60 * 60 * 1000;
+	const start = now - 12 * 60 * 60 * 1000;
 
 	return (
 		<div className="card charts">
@@ -67,17 +67,17 @@ export default function TimeSeriesChart({ title, series }: Props) {
 			<div style={{ width: '100%', height: 360 }}>
 				<ResponsiveContainer>
 					<LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-						<CartesianGrid stroke="rgba(255,255,255,0.18)" vertical={false} />
+						<CartesianGrid stroke="rgba(0,0,0,0.1)" vertical={false} />
 						<XAxis
 							dataKey="ts"
 							type="number"
 							domain={[start, now]}
 							tickFormatter={(ts) => format(ts, 'HH:00')}
-							interval={60} /* approx 1h grid with per-minute data */
-							stroke="rgba(255,255,255,0.6)"
+							ticks={Array.from({ length: 13 }, (_, i) => start + i * 60 * 60 * 1000)}
+							stroke="rgba(0,0,0,0.4)"
 						/>
 						<YAxis
-							stroke="rgba(255,255,255,0.6)"
+							stroke="rgba(0,0,0,0.4)"
 						/>
 						<Tooltip content={<CustomTooltip />} />
 						{series.map(s => (
@@ -96,7 +96,7 @@ export default function TimeSeriesChart({ title, series }: Props) {
 					</LineChart>
 				</ResponsiveContainer>
 			</div>
-			<div className="subtitle" style={{ marginTop: 6 }}>Per menit, grid 1 jam, jendela 24 jam</div>
+			<div className="subtitle" style={{ marginTop: 6 }}>Per menit, grid 1 jam, jendela 12 jam</div>
 		</div>
 	);
 }
