@@ -100,7 +100,7 @@ export function advanceOneMinute(state: DashboardState): DashboardState {
 }
 
 export const SENSOR_META: Record<SensorKey, { label: string; unit: string; color: string }> = {
-	light: { label: 'Intensitas Cahaya', unit: 'klux', color: '#fbbf24' },
+	light: { label: 'Intensitas Cahaya', unit: 'lux', color: '#fbbf24' },
 	airHumidity: { label: 'Kelembapan Udara', unit: '%', color: '#60a5fa' },
 	soilMoisture: { label: 'Kelembapan Tanah', unit: '%', color: '#34d399' },
 	airTemp: { label: 'Suhu Udara', unit: '°C', color: '#f472b6' }
