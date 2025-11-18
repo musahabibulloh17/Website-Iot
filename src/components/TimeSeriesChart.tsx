@@ -6,7 +6,8 @@ import {
 	XAxis,
 	YAxis,
 	CartesianGrid,
-	Tooltip
+	Tooltip,
+	ReferenceLine
 } from 'recharts';
 import { SensorKey, SensorPoint } from '../types';
 import { SENSOR_META } from '../data';
@@ -50,8 +51,13 @@ export default function TimeSeriesChart({ title, series }: Props) {
 		return row;
 	});
 
-	const now = Date.now();
-	const start = now - 12 * 60 * 60 * 1000;
+	// Hitung waktu mulai dari data pertama di database
+	const minTimestamp = allTs.length > 0 ? Math.min(...allTs) : Date.now();
+	const start = minTimestamp;
+	const end = start + 12 * 60 * 60 * 1000; // 12 jam dari data pertama
+	
+	// Buat array referensi garis untuk setiap jam
+	const hourlyLines = Array.from({ length: 13 }, (_, i) => start + i * 60 * 60 * 1000);
 
 	return (
 		<div className="card charts">
@@ -71,15 +77,25 @@ export default function TimeSeriesChart({ title, series }: Props) {
 						<XAxis
 							dataKey="ts"
 							type="number"
-							domain={[start, now]}
-							tickFormatter={(ts) => format(ts, 'HH:00')}
-							ticks={Array.from({ length: 13 }, (_, i) => start + i * 60 * 60 * 1000)}
+							domain={[start, end]}
+							tickFormatter={(ts) => format(ts, 'HH:mm')}
+							ticks={hourlyLines}
 							stroke="rgba(0,0,0,0.4)"
 						/>
 						<YAxis
 							stroke="rgba(0,0,0,0.4)"
 						/>
 						<Tooltip content={<CustomTooltip />} />
+						{/* Garis vertikal untuk setiap jam */}
+						{hourlyLines.map((timestamp, i) => (
+							<ReferenceLine
+								key={`ref-${i}`}
+								x={timestamp}
+								stroke="rgba(0,0,0,0.15)"
+								strokeDasharray="3 3"
+								opacity={0.5}
+							/>
+						))}
 						{series.map(s => (
 							<Line
 								key={s.key}
@@ -96,8 +112,7 @@ export default function TimeSeriesChart({ title, series }: Props) {
 					</LineChart>
 				</ResponsiveContainer>
 			</div>
-			<div className="subtitle" style={{ marginTop: 6 }}>Per menit, grid 1 jam, jendela 12 jam</div>
+			<div className="subtitle" style={{ marginTop: 6 }}>Per menit, grid 1 jam, dari data pertama database selama 12 jam</div>
 		</div>
 	);
 }
-
