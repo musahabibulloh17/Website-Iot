@@ -1,280 +1,139 @@
-/*
-  ESP32 IoT Dashboard - Sensor & Actuator Controller
-  
-  Fitur:
-  - Membaca 4 sensor (light, humidity, soil moisture, temperature)
-  - Mengontrol 3 aktuator (lamp, fan, pump)
-  - Send data ke Firebase Realtime Database setiap 1 menit
-  - Menerima commands dari Firebase untuk actuator control
-  
-  Hardware Required:
-  - ESP32 Development Board
-  - 4x Analog Sensors
-  - 3x Relay Modules (untuk actuators)
-  
-  Setup:
-  1. Install Arduino IDE
-  2. Add ESP32 board manager
-  3. Install ArduinoJson library
-  4. Update WiFi & Firebase credentials di bawah
-  5. Upload ke ESP32
-*/
+#include <DHT.h>
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+// =======================
+//       PIN SENSOR
+// =======================
+#define DHTPIN   23     // tetap D23
+#define DHTTYPE  DHT22
+#define SOIL_PIN 34     // sensor soil (input only, boleh)
+#define LDR_PIN  35     // LDR (input only, boleh)
 
-// ===== WiFi Configuration =====
-const char* SSID = "YOUR_WIFI_SSID";
-const char* PASSWORD = "YOUR_WIFI_PASSWORD";
+DHT dht(DHTPIN, DHTTYPE);
 
-// ===== Firebase Configuration =====
-// Dapatkan dari Firebase Console > Project Settings
-const char* FIREBASE_HOST = "https://your-project-id.firebaseio.com";
-const char* FIREBASE_SECRET = "your-database-secret";
+// =======================
+//   KALIBRASI SOIL & LDR
+// =======================
+int airValue   = 3000;  // tanah kering
+int waterValue = 1200;  // tanah basah
+float Rfixed = 10000.0;
 
-// ===== Sensor Pin Configuration =====
-// Change pins sesuai dengan ESP32 pin layout Anda
-const int LIGHT_PIN = 34;           // Analog pin untuk light sensor
-const int HUMIDITY_PIN = 35;        // Analog pin untuk humidity sensor
-const int SOIL_MOISTURE_PIN = 32;   // Analog pin untuk soil moisture
-const int TEMP_PIN = 33;            // Analog pin untuk temperature sensor
+// =======================
+//     PIN AKTUATOR (PAKAI LABEL Dxx YANG AMAN)
+// =======================
+// L298N Channel A → Kipas
+#define FAN_IN1   16
+#define FAN_IN2   17
+#define FAN_ENA   5    // Enable A (dulu sering GPIO5 / D5)
 
-// ===== Actuator Pin Configuration =====
-// GPIO pins untuk relay/actuator control
-const int LAMP_PIN = 13;    // GPIO untuk lamp (lampu)
-const int FAN_PIN = 14;     // GPIO untuk fan (kipas)
-const int PUMP_PIN = 15;    // GPIO untuk pump (pompa)
+// L298N Channel B → Pompa
+#define PUMP_IN1  26   // D26 sangat aman
+#define PUMP_IN2  27   // D27 sangat aman
+#define PUMP_ENB  4    // Enable B (D4 juga aman dan banyak dipakai)
 
-// ===== Update Interval =====
-const unsigned long UPDATE_INTERVAL = 60000; // 60 second (1 menit)
-unsigned long lastUpdate = 0;
+// Lampu LED
+#define LAMP_PIN  25
 
-// ===== Actuator State =====
-bool lampState = false;
-bool fanState = false;
-bool pumpState = false;
+// =======================
+//  BATAS KENDALI
+// =======================
+const float TEMP_HIGH        = 32.0;
+const float HUMID_LOW        = 71.0;
+const float SOIL_LOW_PERCENT = 50.0;
+const float LUX_LOW          = 22.0;
 
-// ===== Setup =====
+// =======================
+//   FUNGSI MOTOR
+// =======================
+void setFan(bool on) {
+  digitalWrite(FAN_IN1, on ? HIGH : LOW);
+  digitalWrite(FAN_IN2, on ? LOW  : LOW);
+  digitalWrite(FAN_ENA, HIGH);   // selalu enable (atau PWM nanti)
+}
+
+void setPump(bool on) {
+  digitalWrite(PUMP_IN1, on ? HIGH : LOW);
+  digitalWrite(PUMP_IN2, on ? LOW  : LOW);
+  digitalWrite(PUMP_ENB, HIGH);
+}
+
+void setLamp(bool on) {
+  digitalWrite(LAMP_PIN, on ? HIGH : LOW);
+}
+
+// =======================
+//        SETUP
+// =======================
 void setup() {
   Serial.begin(115200);
-  delay(2000);
-  
-  Serial.println("\n\n");
-  Serial.println("================================");
-  Serial.println("ESP32 IoT Dashboard Starting...");
-  Serial.println("================================");
-  
-  // Setup sensor pins (INPUT)
-  pinMode(LIGHT_PIN, INPUT);
-  pinMode(HUMIDITY_PIN, INPUT);
-  pinMode(SOIL_MOISTURE_PIN, INPUT);
-  pinMode(TEMP_PIN, INPUT);
-  
-  // Setup actuator pins (OUTPUT)
+  dht.begin();
+
+  // Pin aktuator
+  pinMode(FAN_IN1,  OUTPUT);
+  pinMode(FAN_IN2,  OUTPUT);
+  pinMode(FAN_ENA,  OUTPUT);
+  pinMode(PUMP_IN1, OUTPUT);
+  pinMode(PUMP_IN2, OUTPUT);
+  pinMode(PUMP_ENB, OUTPUT);
   pinMode(LAMP_PIN, OUTPUT);
-  pinMode(FAN_PIN, OUTPUT);
-  pinMode(PUMP_PIN, OUTPUT);
-  
-  // Initial actuator state OFF
-  digitalWrite(LAMP_PIN, LOW);
-  digitalWrite(FAN_PIN, LOW);
-  digitalWrite(PUMP_PIN, LOW);
-  
-  // Connect to WiFi
-  connectToWiFi();
+
+  // Enable selalu HIGH
+  digitalWrite(FAN_ENA, HIGH);
+  digitalWrite(PUMP_ENB, HIGH);
+
+  // Matikan semua dulu
+  setFan(false);
+  setPump(false);
+  setLamp(false);
+
+  delay(2000);
+  Serial.println("Sistem siap dengan pin Dxx!");
 }
 
-// ===== Main Loop =====
+// =======================
+//         LOOP
+// =======================
 void loop() {
-  // Check WiFi connection setiap loop
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected! Reconnecting...");
-    connectToWiFi();
+  delay(2000);
+
+  // DHT22
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) {
+    Serial.println("ERROR DHT22!");
+    h = 0; t = 0;
   }
-  
-  // Send sensor data setiap UPDATE_INTERVAL
-  if (millis() - lastUpdate >= UPDATE_INTERVAL) {
-    lastUpdate = millis();
-    
-    Serial.println("\n--- Reading Sensors ---");
-    
-    // Read sensor raw values (0-4095 untuk ESP32 ADC)
-    int lightRaw = analogRead(LIGHT_PIN);
-    int humidityRaw = analogRead(HUMIDITY_PIN);
-    int soilRaw = analogRead(SOIL_MOISTURE_PIN);
-    int tempRaw = analogRead(TEMP_PIN);
-    
-    // Convert raw values to readable format
-    // Sesuaikan mapping dengan sensor Anda
-    float light = map(lightRaw, 0, 4095, 0, 100);              // 0-100 %
-    float humidity = map(humidityRaw, 0, 4095, 30, 100);       // 30-100 %
-    float soilMoisture = map(soilRaw, 0, 4095, 10, 90);        // 10-90 %
-    float temperature = map(tempRaw, 0, 4095, 10, 45);         // 10-45 °C
-    
-    Serial.printf("Light: %.2f%%\n", light);
-    Serial.printf("Humidity: %.2f%%\n", humidity);
-    Serial.printf("Soil: %.2f%%\n", soilMoisture);
-    Serial.printf("Temp: %.2f°C\n", temperature);
-    
-    // Send semua sensor data ke Firebase
-    sendSensorData("light", light);
-    sendSensorData("airHumidity", humidity);
-    sendSensorData("soilMoisture", soilMoisture);
-    sendSensorData("airTemp", temperature);
-    
-    // Check untuk commands dari Firebase (control actuator)
-    Serial.println("\n--- Checking Actuator Commands ---");
-    checkActuatorCommands();
-  }
-  
-  delay(1000); // Check interval 1 detik
+
+  // Soil
+  int soilRaw = analogRead(SOIL_PIN);
+  float soilPercent = map(constrain(soilRaw, waterValue, airValue), waterValue, airValue, 100, 0);
+  soilPercent = constrain(soilPercent, 0, 100);
+
+  // LDR → Lux
+  int ldrRaw = analogRead(LDR_PIN);
+  float Vout = ldrRaw * (3.3 / 4095.0);
+  Vout = constrain(Vout, 0.01, 3.29);
+  float Rldr = (3.3 - Vout) * Rfixed / Vout;
+  float R_k = max(Rldr / 1000.0, 0.1);
+  float lux = 500.0 / pow(R_k, 1.4);
+
+  // Logika kendali
+  bool fanOn  = (t > TEMP_HIGH || h < HUMID_LOW);
+  bool pumpOn = (soilPercent < SOIL_LOW_PERCENT);
+  bool lampOn = (lux < LUX_LOW);
+
+  setFan(fanOn);
+  setPump(pumpOn);
+  setLamp(lampOn);
+
+  // Print
+  Serial.println("===== SENSOR =====");
+  Serial.printf("Suhu       : %.1f °C\n", t);
+  Serial.printf("Kelembapan : %.1f %%\n", h);
+  Serial.printf("Tanah      : %.1f %%\n", soilPercent);
+  Serial.printf("Cahaya     : %.1f lux\n", lux);
+  Serial.println("----- AKTUATOR -----");
+  Serial.printf("Kipas (D16-D17) : %s\n", fanOn  ? "ON " : "OFF");
+  Serial.printf("Pompa (D26-D27) : %s\n", pumpOn ? "ON " : "OFF");
+  Serial.printf("Lampu (D25)     : %s\n", lampOn ? "ON " : "OFF");
+  Serial.println("========================\n");
 }
-
-// ===== WiFi Connection =====
-void connectToWiFi() {
-  Serial.print("Connecting to WiFi: ");
-  Serial.println(SSID);
-  
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(SSID, PASSWORD);
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✓ WiFi Connected!");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("RSSI: ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
-  } else {
-    Serial.println("\n✗ Failed to connect to WiFi");
-  }
-}
-
-// ===== Send Sensor Data ke Firebase =====
-void sendSensorData(const char* sensorName, float value) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected. Skipping sensor upload.");
-    return;
-  }
-  
-  HTTPClient http;
-  
-  // Construct Firebase URL
-  String url = String(FIREBASE_HOST) + "/sensors/" + sensorName + "/current.json";
-  
-  // Create JSON payload
-  StaticJsonDocument<200> doc;
-  doc["value"] = value;
-  doc["timestamp"] = millis();
-  
-  String jsonPayload;
-  serializeJson(doc, jsonPayload);
-  
-  // Send PUT request ke Firebase
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  
-  Serial.printf("Sending %s: %.2f to Firebase\n", sensorName, value);
-  
-  int httpCode = http.PUT(jsonPayload);
-  
-  if (httpCode > 0) {
-    Serial.printf("✓ HTTP Response: %d\n", httpCode);
-  } else {
-    Serial.printf("✗ HTTP Error: %s\n", http.errorToString(httpCode).c_str());
-  }
-  
-  http.end();
-}
-
-// ===== Check Actuator Commands dari Firebase =====
-void checkActuatorCommands() {
-  // Check command untuk lamp
-  updateActuatorState("lamp", LAMP_PIN);
-  updateActuatorState("fan", FAN_PIN);
-  updateActuatorState("pump", PUMP_PIN);
-}
-
-// ===== Update Actuator State =====
-void updateActuatorState(const char* actuatorName, int pin) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected. Skipping command check.");
-    return;
-  }
-  
-  HTTPClient http;
-  
-  // Construct Firebase URL untuk command
-  String url = String(FIREBASE_HOST) + "/actuators/" + actuatorName + "/command.json";
-  
-  http.begin(url);
-  int httpCode = http.GET();
-  
-  if (httpCode == 200) {
-    String response = http.getString();
-    
-    // Parse JSON response
-    StaticJsonDocument<200> doc;
-    DeserializationError error = deserializeJson(doc, response);
-    
-    if (!error) {
-      if (doc.containsKey("isOn")) {
-        bool isOn = doc["isOn"].as<bool>();
-        digitalWrite(pin, isOn ? HIGH : LOW);
-        
-        // Store state
-        if (pin == LAMP_PIN) lampState = isOn;
-        else if (pin == FAN_PIN) fanState = isOn;
-        else if (pin == PUMP_PIN) pumpState = isOn;
-        
-        Serial.printf("✓ %s: %s\n", actuatorName, isOn ? "ON" : "OFF");
-      }
-    } else {
-      Serial.printf("JSON Parse Error: %s\n", error.c_str());
-    }
-  } else if (httpCode == 404) {
-    // Command not found, set default state
-    Serial.printf("✗ %s command not found (404)\n", actuatorName);
-  } else {
-    Serial.printf("✗ HTTP Error %d for %s\n", httpCode, actuatorName);
-  }
-  
-  http.end();
-}
-
-// ===== Utility Functions =====
-
-// Print ESP32 info
-void printESP32Info() {
-  Serial.println("\n=== ESP32 System Info ===");
-  Serial.printf("CPU Freq: %d MHz\n", getCpuFreqMHz());
-  Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
-  Serial.printf("PSRAM Free: %d bytes\n", ESP.getFreePsram());
-}
-
-/*
-  TESTING & DEBUGGING
-  
-  Jika dashboard tidak menerima data:
-  1. Check serial monitor untuk error messages
-  2. Pastikan WiFi connected (lihat IP Address)
-  3. Pastikan Firebase credentials benar
-  4. Check Firebase Realtime Database rules (pastikan write enabled)
-  5. Test Firebase connection dengan Postman/curl
-  
-  Example curl test:
-  curl -X GET "https://your-project.firebaseio.com/sensors/light/current.json"
-  
-  Manual PUT command:
-  curl -X PUT \
-    -d '{"value":75.5,"timestamp":1234567890}' \
-    https://your-project.firebaseio.com/sensors/light/current.json
-*/
