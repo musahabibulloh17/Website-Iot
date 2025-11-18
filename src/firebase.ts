@@ -108,6 +108,7 @@ export async function updateActuatorCommand(
 ): Promise<void> {
 	try {
 		const commandRef = ref(database, `actuators/${actuatorKey}/command`);
+		// Simpan sebagai object dengan isOn property untuk consistency dengan ESP32
 		await set(commandRef, {
 			isOn,
 			timestamp: Date.now()
@@ -126,10 +127,8 @@ export async function updateSystemMode(
 ): Promise<void> {
 	try {
 		const modeRef = ref(database, 'system/mode');
-		await set(modeRef, {
-			mode,
-			timestamp: Date.now()
-		});
+		// Simpan sebagai string agar ESP32 bisa baca dengan getString()
+		await set(modeRef, mode);
 	} catch (error) {
 		console.error('Error updating system mode:', error);
 		throw error;
@@ -149,8 +148,15 @@ export function subscribeSystemMode(
 			modeRef,
 			(snapshot) => {
 				if (snapshot.exists()) {
-					const data = snapshot.val() as any;
-					onUpdate(data.mode ?? 'auto');
+					const data = snapshot.val();
+					// Mode bisa berupa string langsung atau dalam object dengan mode property
+					if (typeof data === 'string') {
+						onUpdate(data as 'auto' | 'manual');
+					} else if (data?.mode) {
+						onUpdate(data.mode as 'auto' | 'manual');
+					} else {
+						onUpdate('auto');
+					}
 				}
 			},
 			(error: any) => onError(error as Error)
