@@ -263,6 +263,14 @@ body.light-mode .switch.on {
 	border-color: #10b981;
 }
 
+body.light-mode .knob {
+	background: #94a3b8;
+}
+
+body.light-mode .switch.on .knob {
+	background: #10b981;
+}
+
 body.light-mode .btn {
 	border-color: #e2e8f0;
 	color: #0f172a;
@@ -275,9 +283,19 @@ body.light-mode .btn:hover {
 	color: #0ea5e9;
 }
 
+body.light-mode .btn.danger {
+	border-color: rgba(220, 38, 38, 0.5);
+	color: #dc2626;
+}
+
 body.light-mode .btn.danger:hover {
 	border-color: #dc2626;
 	background: rgba(220, 38, 38, 0.08);
+}
+
+body.light-mode .btn.ok {
+	border-color: rgba(5, 150, 105, 0.5);
+	color: #059669;
 }
 
 body.light-mode .btn.ok:hover {
