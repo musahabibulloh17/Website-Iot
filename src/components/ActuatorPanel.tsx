@@ -8,9 +8,15 @@ interface Props {
 	onAll: (next: boolean) => void;
 }
 
-function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
 	return (
-		<div className={`switch ${on ? 'on' : ''}`} onClick={onClick} role="switch" aria-checked={on}>
+		<div 
+			className={`switch ${on ? 'on' : ''}`} 
+			onClick={() => !disabled && onClick()} 
+			role="switch" 
+			aria-checked={on}
+			style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+		>
 			<div className="knob" />
 		</div>
 	);
@@ -20,31 +26,84 @@ export default function ActuatorPanel({ mode, onModeChange, actuators, onToggle,
 	const isAuto = mode === 'auto';
 	return (
 		<div className="card">
-			<div className="row" style={{ marginBottom: 12 }}>
-				<div className="title" style={{ fontSize: 18, margin: 0 }}>Aktuator</div>
+			<div className="row" style={{ marginBottom: 20 }}>
+				<div>
+					<div className="title" style={{ fontSize: 20, margin: 0, marginBottom: 4 }}>Aktuator</div>
+					<div style={{ fontSize: 12, color: 'var(--muted)' }}>
+						Mode: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{isAuto ? 'Otomatis' : 'Manual'}</span>
+					</div>
+				</div>
 				<div className="spacer" />
-				<div className="badge">{isAuto ? 'Mode Otomatis' : 'Mode Manual'}</div>
+				<div className="row" style={{ gap: 10 }}>
+					<button 
+						className={`btn ${isAuto ? 'ok' : ''}`} 
+						onClick={() => onModeChange('auto')} 
+						disabled={isAuto}
+						style={{ minWidth: 80 }}
+					>
+						Otomatis
+					</button>
+					<button 
+						className={`btn ${!isAuto ? 'ok' : ''}`} 
+						onClick={() => onModeChange('manual')} 
+						disabled={!isAuto}
+						style={{ minWidth: 80 }}
+					>
+						Manual
+					</button>
+				</div>
 			</div>
-			<div className="row" style={{ marginBottom: 12, gap: 16 }}>
-				<button className="btn" onClick={() => onModeChange('auto')} disabled={isAuto}>Otomatis</button>
-				<button className="btn" onClick={() => onModeChange('manual')} disabled={!isAuto}>Manual</button>
-				<div className="spacer" />
-				<button className="btn ok" onClick={() => onAll(true)} disabled={isAuto}>Semua ON</button>
-				<button className="btn danger" onClick={() => onAll(false)} disabled={isAuto}>Semua OFF</button>
-			</div>
+
+			{!isAuto && (
+				<div className="row" style={{ marginBottom: 20, gap: 10 }}>
+					<button className="btn ok" onClick={() => onAll(true)}>
+						✓ Semua ON
+					</button>
+					<button className="btn danger" onClick={() => onAll(false)}>
+						✕ Semua OFF
+					</button>
+				</div>
+			)}
+
 			<div className="actuator-grid">
 				{(['lamp', 'fan', 'pump'] as ActuatorKey[]).map((k) => {
 					const a = actuators[k];
+					const statusColor = a.isOn ? 'var(--ok)' : 'var(--muted)';
 					return (
-						<div key={k} className="card actuator-item">
-							<div className="row">
-								<div className="title" style={{ fontSize: 16, margin: 0 }}>{a.name}</div>
+						<div key={k} className="card actuator-item" style={{
+							border: `1.5px solid ${a.isOn ? 'rgba(16, 185, 129, 0.3)' : 'var(--card-border)'}`,
+							background: a.isOn ? 'rgba(16, 185, 129, 0.05)' : 'transparent'
+						}}>
+							<div className="row" style={{ marginBottom: 12 }}>
+								<div style={{ fontSize: 14, fontWeight: 600 }}>{a.name}</div>
 								<div className="spacer" />
-								<div className="badge" style={{ color: a.isOn ? 'var(--ok)' : 'var(--muted)' }}>{a.isOn ? 'Nyala' : 'Mati'}</div>
+								<div style={{ 
+									fontSize: 11, 
+									fontWeight: 600,
+									color: statusColor,
+									display: 'flex',
+									alignItems: 'center',
+									gap: 4
+								}}>
+									<span style={{
+										display: 'inline-block',
+										width: 6,
+										height: 6,
+										borderRadius: '50%',
+										background: statusColor
+									}}></span>
+									{a.isOn ? 'ON' : 'OFF'}
+								</div>
 							</div>
-							<div className="row" style={{ marginTop: 10 }}>
-								<Toggle on={a.isOn} onClick={() => !isAuto && onToggle(k, !a.isOn)} />
-								<div className="subtitle" style={{ margin: 0 }}>{isAuto ? 'Dikendalikan otomatis' : 'Tekan untuk ubah'}</div>
+							<div className="row" style={{ gap: 12 }}>
+								<Toggle 
+									on={a.isOn} 
+									onClick={() => !isAuto && onToggle(k, !a.isOn)}
+									disabled={isAuto}
+								/>
+								<div style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+									{isAuto ? 'Otomatis' : (a.isOn ? 'Aktif' : 'Nonaktif')}
+								</div>
 							</div>
 						</div>
 					);

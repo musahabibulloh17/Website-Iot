@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import SensorCard from './components/SensorCard';
 import TimeSeriesChart from './components/TimeSeriesChart';
 import ActuatorPanel from './components/ActuatorPanel';
+import ThemeToggle from './components/ThemeToggle';
 import { createInitialDashboardState, advanceOneMinute } from './data';
 import { ActuatorKey, DashboardState, SensorKey } from './types';
+import { useTheme } from './hooks/useTheme';
 import { 
 	subscribeToSensorCurrent,
 	subscribeSensorTimeSeries,
@@ -19,6 +21,7 @@ export default function App() {
 	const [state, setState] = useState<DashboardState>(() => createInitialDashboardState());
 	const timerRef = useRef<number | null>(null);
 	const unsubscribesRef = useRef<(() => void)[]>([]);
+	const { theme, toggleTheme } = useTheme();
 
 	// Subscribe to Firebase realtime data
 	useEffect(() => {
@@ -169,29 +172,59 @@ export default function App() {
 	};
 
 	return (
-		<div className="container">
-			<div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-				<div className="title">IoT Realtime Dashboard</div>
-				<div className="subtitle">Pemantauan cahaya, kelembapan udara, kelembapan tanah, dan suhu</div>
-				{USE_FIREBASE && (
-					<div className="badge" style={{ marginLeft: 'auto', background: '#22c55e', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
-						🔥 Connected to Firebase
-					</div>
-				)}
-				{!USE_FIREBASE && (
-					<div className="badge" style={{ marginLeft: 'auto', background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
-						📊 Demo Mode
-					</div>
-				)}
+		<>
+			<ThemeToggle theme={theme} onToggle={toggleTheme} />
+			<div className="container">
+			<div style={{ marginBottom: 32 }}>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+					<div className="title" style={{ margin: 0 }}>🌱 IoT Dashboard</div>
+					{USE_FIREBASE && (
+						<div style={{ 
+							fontSize: 11, 
+							fontWeight: 600, 
+							color: 'var(--ok)',
+							display: 'flex',
+							alignItems: 'center',
+							gap: 6,
+							padding: '4px 8px',
+							background: 'rgba(16, 185, 129, 0.1)',
+							border: '1px solid rgba(16, 185, 129, 0.3)',
+							borderRadius: 6
+						}}>
+							<span style={{ width: 6, height: 6, background: 'var(--ok)', borderRadius: '50%', display: 'inline-block' }}></span>
+							Connected
+						</div>
+					)}
+					{!USE_FIREBASE && (
+						<div style={{ 
+							fontSize: 11, 
+							fontWeight: 600, 
+							color: 'var(--warning)',
+							display: 'flex',
+							alignItems: 'center',
+							gap: 6,
+							padding: '4px 8px',
+							background: 'rgba(234, 179, 8, 0.1)',
+							border: '1px solid rgba(234, 179, 8, 0.3)',
+							borderRadius: 6
+						}}>
+							<span style={{ width: 6, height: 6, background: 'var(--warning)', borderRadius: '50%', display: 'inline-block' }}></span>
+							Demo Mode
+						</div>
+					)}
+				</div>
+				<div style={{ fontSize: 13, color: 'var(--muted)' }}>
+					Pemantauan real-time cahaya, kelembapan udara, kelembapan tanah, dan suhu
+				</div>
 			</div>
 
-			<div className="grid" style={{ marginBottom: 12 }}>
+			<div className="grid" style={{ marginBottom: 24 }}>
 				{sensorOrder.map((k) => (
 					<SensorCard key={k} sensor={k} value={state.current[k]} />
 				))}
 			</div>
 
-			<div className="grid" style={{ marginBottom: 12 }}>
+			<div className="grid" style={{ marginBottom: 24 }}>
 				{chartGroups.map(group => (
 					<TimeSeriesChart key={group.title} title={group.title} series={group.series} />
 				))}
@@ -205,13 +238,14 @@ export default function App() {
 				onAll={setAllActuators}
 			/>
 
-			<div className="subtitle" style={{ marginTop: 18 }}>
+			<div style={{ marginTop: 24, padding: '12px 16px', background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 10, fontSize: 12, color: 'var(--muted)' }}>
 				{USE_FIREBASE 
 					? '✅ Data real-time dari Firebase Realtime Database'
-					: '📊 Data disimulasikan. Ubah VITE_MODE=firebase untuk production'
+					: '📊 Demo Mode • Ubah VITE_MODE=firebase untuk production'
 				}
 			</div>
-		</div>
+			</div>
+		</>
 	);
 }
 
